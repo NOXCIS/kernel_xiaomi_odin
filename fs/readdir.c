@@ -702,12 +702,12 @@ struct compat_linux_dirent {
 struct compat_getdents_callback {
 	struct dir_context ctx;
 	struct compat_linux_dirent __user *current_dir;
-	struct compat_linux_dirent __user *previous;
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	struct super_block *sb;
 	bool is_base_dentry_android_data_root_dir;
 	bool is_base_dentry_sdcard_root_dir;
 #endif
+	struct compat_linux_dirent __user *previous;
 	int count;
 	int error;
 };

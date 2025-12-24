@@ -946,18 +946,23 @@ static void show_smap_vma(struct seq_file *m, void *v)
 		unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
 		susfs_is_current_proc_umounted())
 	{
+		smap_gather_stats(vma, &mss);
+
 		show_map_vma(m, vma);
+		if (vma_get_anon_name(vma)) {
+			seq_puts(m, "Name:           ");
+			seq_print_vma_name(m, vma);
+		}
+
 		SEQ_PUT_DEC("Size:           ", vma->vm_end - vma->vm_start);
 		SEQ_PUT_DEC(" kB\nKernelPageSize: ", vma_kernel_pagesize(vma));
 		SEQ_PUT_DEC(" kB\nMMUPageSize:    ", vma_mmu_pagesize(vma));
 		seq_puts(m, " kB\n");
 		__show_smap(m, &mss, false);
-		seq_printf(m, "THPeligible:    %d\n", 0);
+		seq_printf(m, "THPeligible:    %d\n", transparent_hugepage_enabled(vma));
 		if (arch_pkeys_enabled())
 				seq_printf(m, "ProtectionKey:  %8u\n", vma_pkey(vma));
-		seq_puts(m, "VmFlags: mr mw me");
-		seq_putc(m, '\n');
-		goto show_pad;
+		goto bypass_orig_flow;
 	}
 #endif
 
@@ -982,6 +987,9 @@ static void show_smap_vma(struct seq_file *m, void *v)
 
 	if (arch_pkeys_enabled())
 		seq_printf(m, "ProtectionKey:  %8u\n", vma_pkey(vma));
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+bypass_orig_flow:
+#endif
 	show_smap_vma_flags(m, vma);
 }
 
