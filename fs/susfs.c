@@ -971,10 +971,13 @@ void susfs_set_hide_sus_mnts_for_non_su_procs(void __user **user_info)
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 void susfs_enable_log(void __user **user_info)
 {
-	/* v2.0 wrapper: extract bool from user and call v1.5.5 susfs_set_log */
-	int val = 0;
+	/*
+	 * v2.0.0 struct st_susfs_log: { bool enabled(1); pad(3); int err(4); }
+	 * Read the bool at offset 0 (1 byte).
+	 */
+	u8 val = 0;
 	if (user_info && *user_info) {
-		get_user(val, (int __user *)(*user_info));
+		get_user(val, (u8 __user *)(*user_info));
 	}
 	susfs_set_log(val ? true : false);
 }
@@ -994,17 +997,118 @@ void susfs_set_avc_log_spoofing(void __user **user_info)
 
 void susfs_get_enabled_features(void __user **user_info)
 {
-	/* Not implemented in v1.5.5 - no-op */
+	/*
+	 * v2.0.0 struct: { char enabled_features[8192]; int err; }
+	 * The binary reads feature names as newline-separated strings.
+	 */
+	void __user *uptr = (void __user *)*user_info;
+	char buf[2048];
+	int len = 0;
+	int zero = 0;
+
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SUS_PATH\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SUS_MOUNT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SUS_KSTAT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SUS_OVERLAYFS
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SUS_OVERLAYFS\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_TRY_UMOUNT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SPOOF_UNAME\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_ENABLE_LOG\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_OPEN_REDIRECT\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_SUS_SU\n");
+#endif
+#ifdef CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT
+	len += snprintf(buf + len, sizeof(buf) - len, "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT\n");
+#endif
+
+	/* Write feature string at offset 0 of the struct */
+	if (copy_to_user(uptr, buf, len + 1)) {
+		pr_err("susfs: CMD_SUSFS_SHOW_ENABLED_FEATURES -> copy_to_user failed\n");
+		return;
+	}
+	/* Write err=0 at offset 8192 (after char enabled_features[8192]) */
+	if (copy_to_user(uptr + 8192, &zero, sizeof(zero)))
+		pr_err("susfs: CMD_SUSFS_SHOW_ENABLED_FEATURES -> copy_to_user err failed\n");
+	else
+		pr_info("susfs: CMD_SUSFS_SHOW_ENABLED_FEATURES -> %d features\n", len);
 }
+
+/*
+ * v2.0.0 ksu_susfs binary uses reboot() with structs that embed an 'err' field.
+ * The structs are:
+ *   st_susfs_version  { char susfs_version[16]; int err; }
+ *   st_susfs_variant  { char susfs_variant[16]; int err; }
+ *   st_susfs_enabled_features { char enabled_features[8192]; int err; }
+ *
+ * v1.5.x ksu_susfs binary uses prctl() with separate error pointer.
+ * The reboot handler passes (void __user **arg) where *arg is the struct ptr.
+ */
 
 void susfs_show_variant(void __user **user_info)
 {
-	/* Not implemented in v1.5.5 - no-op */
+	const char *variant = SUSFS_VARIANT;
+	void __user *uptr = (void __user *)*user_info;
+	int zero = 0;
+
+	/* Write variant string at offset 0 of the struct */
+	if (copy_to_user(uptr, variant, strlen(variant) + 1)) {
+		pr_err("susfs: CMD_SUSFS_SHOW_VARIANT -> copy_to_user failed\n");
+		return;
+	}
+	/* Write err=0 at offset 16 (after char susfs_variant[16]) */
+	if (copy_to_user(uptr + 16, &zero, sizeof(zero)))
+		pr_err("susfs: CMD_SUSFS_SHOW_VARIANT -> copy_to_user err failed\n");
+	else
+		pr_info("susfs: CMD_SUSFS_SHOW_VARIANT -> %s\n", variant);
 }
 
 void susfs_show_version(void __user **user_info)
 {
-	/* Not implemented in v1.5.5 - no-op */
+	const char *version = SUSFS_VERSION;
+	void __user *uptr = (void __user *)*user_info;
+	int zero = 0;
+
+	/* Write version string at offset 0 of the struct */
+	if (copy_to_user(uptr, version, strlen(version) + 1)) {
+		pr_err("susfs: CMD_SUSFS_SHOW_VERSION -> copy_to_user failed\n");
+		return;
+	}
+	/* Write err=0 at offset 16 (after char susfs_version[16]) */
+	if (copy_to_user(uptr + 16, &zero, sizeof(zero)))
+		pr_err("susfs: CMD_SUSFS_SHOW_VERSION -> copy_to_user err failed\n");
+	else
+		pr_info("susfs: CMD_SUSFS_SHOW_VERSION -> %s\n", version);
 }
 
 void susfs_start_sdcard_monitor_fn(void)

@@ -184,8 +184,7 @@ EXPORT_SYMBOL(vfs_statx_fd);
  * 0 will be returned on success, and a -ve error code if unsuccessful.
  */
 
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
-extern bool susfs_is_sus_su_hooks_enabled __read_mostly;
+#ifdef CONFIG_KSU_SUSFS
 extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
 #endif
 
@@ -196,10 +195,8 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
 	int error = -EINVAL;
 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
 
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
-	if (susfs_is_sus_su_hooks_enabled) {
-		ksu_handle_stat(&dfd, &filename, &flags);
-	}
+#ifdef CONFIG_KSU_SUSFS
+	ksu_handle_stat(&dfd, &filename, &flags);
 #endif
 
 	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
@@ -405,6 +402,15 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
 {
 	struct kstat stat;
 	int error = vfs_fstat(fd, &stat);
+
+#ifdef CONFIG_KSU_SUSFS
+	if (!error) {
+		extern bool ksu_init_rc_hook __read_mostly;
+		extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
+		if (unlikely(ksu_init_rc_hook))
+			ksu_handle_vfs_fstat(fd, &stat.size);
+	}
+#endif
 
 	if (!error)
 		error = cp_new_stat(&stat, statbuf);
