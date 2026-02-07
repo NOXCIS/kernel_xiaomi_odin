@@ -355,6 +355,10 @@ static void show_vma_header_prefix(struct seq_file *m,
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 extern void susfs_sus_ino_for_show_map_vma(unsigned long ino, dev_t *out_dev, unsigned long *out_ino);
 #endif
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+#include <linux/susfs_def.h>
+extern bool susfs_sus_map_should_hide(unsigned long ino);
+#endif
 
 static void
 show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
@@ -439,6 +443,18 @@ done:
 static int show_map(struct seq_file *m, void *v)
 {
 	struct vm_area_struct *vma = v;
+
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+	/* Hide VMA entries whose backing file is in the sus_map list.
+	 * Only effective for zygote-spawned non-root user app processes. */
+	if (vma->vm_file && (current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {
+		struct inode *inode = file_inode(vma->vm_file);
+		if (inode && susfs_sus_map_should_hide(inode->i_ino)) {
+			m_cache_vma(m, v);
+			return 0;
+		}
+	}
+#endif
 
 	if (vma_pages(vma))
 		show_map_vma(m, vma);
@@ -950,6 +966,16 @@ static void show_smap_vma(struct seq_file *m, void *v)
 static int show_smap(struct seq_file *m, void *v)
 {
 	struct vm_area_struct *vma = v;
+
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+	if (vma->vm_file && (current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {
+		struct inode *inode = file_inode(vma->vm_file);
+		if (inode && susfs_sus_map_should_hide(inode->i_ino)) {
+			m_cache_vma(m, v);
+			return 0;
+		}
+	}
+#endif
 
 	if (vma_pages(vma))
 		show_smap_vma(m, vma);

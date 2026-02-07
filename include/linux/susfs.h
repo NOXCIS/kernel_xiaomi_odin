@@ -18,8 +18,8 @@
 /*********/
 /* MACRO */
 /*********/
-#define getname_safe(name) (name == NULL ? ERR_PTR(-EINVAL) : getname(name))
-#define putname_safe(name) (IS_ERR(name) ? NULL : putname(name))
+#define getname_safe(name) ((name) == NULL ? ERR_PTR(-EINVAL) : getname(name))
+#define putname_safe(name) do { if (!IS_ERR(name)) putname(name); } while(0)
 
 /**********/
 /* STRUCT */
@@ -35,6 +35,7 @@ struct st_susfs_sus_path_hlist {
 	unsigned long                    target_ino;
 	char                             target_pathname[SUSFS_MAX_LEN_PATHNAME];
 	struct hlist_node                node;
+	struct rcu_head                  rcu;
 };
 #endif
 
@@ -75,6 +76,7 @@ struct st_susfs_sus_kstat_hlist {
 	unsigned long                           target_ino;
 	struct st_susfs_sus_kstat               info;
 	struct hlist_node                       node;
+	struct rcu_head                         rcu;
 };
 #endif
 
@@ -112,6 +114,7 @@ struct st_susfs_open_redirect_hlist {
 	char                             target_pathname[SUSFS_MAX_LEN_PATHNAME];
 	char                             redirected_pathname[SUSFS_MAX_LEN_PATHNAME];
 	struct hlist_node                node;
+	struct rcu_head                  rcu;
 };
 #endif
 
@@ -204,6 +207,7 @@ void susfs_enable_log(void __user **user_info);
 #endif
 #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 void susfs_add_sus_map(void __user **user_info);
+bool susfs_sus_map_should_hide(unsigned long ino);
 #endif
 void susfs_set_avc_log_spoofing(void __user **user_info);
 void susfs_get_enabled_features(void __user **user_info);

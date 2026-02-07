@@ -185,6 +185,7 @@ EXPORT_SYMBOL(vfs_statx_fd);
  */
 
 #ifdef CONFIG_KSU_SUSFS
+extern bool ksu_su_compat_enabled __read_mostly;
 extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
 #endif
 
@@ -196,7 +197,8 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
 
 #ifdef CONFIG_KSU_SUSFS
-	ksu_handle_stat(&dfd, &filename, &flags);
+	if (unlikely(ksu_su_compat_enabled))
+		ksu_handle_stat(&dfd, &filename, &flags);
 #endif
 
 	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
