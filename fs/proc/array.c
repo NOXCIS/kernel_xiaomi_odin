@@ -96,6 +96,11 @@
 #include <asm/processor.h>
 #include "internal.h"
 
+#if defined(CONFIG_KSU) && defined(CONFIG_KSU_HIDE_TRACERPID)
+extern bool ksu_should_hide_tracerpid(struct task_struct *reader,
+				      struct task_struct *target);
+#endif
+
 void proc_task_name(struct seq_file *m, struct task_struct *p, bool escape)
 {
 	char *buf;
@@ -189,6 +194,10 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 	seq_put_decimal_ull(m, "\nNgid:\t", ngid);
 	seq_put_decimal_ull(m, "\nPid:\t", pid_nr_ns(pid, ns));
 	seq_put_decimal_ull(m, "\nPPid:\t", ppid);
+#if defined(CONFIG_KSU) && defined(CONFIG_KSU_HIDE_TRACERPID)
+	if (ksu_should_hide_tracerpid(current, p))
+		tpid = 0;
+#endif
 	seq_put_decimal_ull(m, "\nTracerPid:\t", tpid);
 	seq_put_decimal_ull(m, "\nUid:\t", from_kuid_munged(user_ns, cred->uid));
 	seq_put_decimal_ull(m, "\t", from_kuid_munged(user_ns, cred->euid));

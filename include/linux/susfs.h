@@ -18,8 +18,8 @@
 /*********/
 /* MACRO */
 /*********/
-#define getname_safe(name) (name == NULL ? ERR_PTR(-EINVAL) : getname(name))
-#define putname_safe(name) (IS_ERR(name) ? NULL : putname(name))
+#define getname_safe(name) ((name) == NULL ? ERR_PTR(-EINVAL) : getname(name))
+#define putname_safe(name) do { if (!IS_ERR(name)) putname(name); } while(0)
 
 /**********/
 /* STRUCT */
@@ -81,6 +81,7 @@ struct st_susfs_sus_kstat_hlist {
 	unsigned long                           target_ino;
 	struct st_susfs_sus_kstat               info;
 	struct hlist_node                       node;
+	struct rcu_head                         rcu;
 };
 #endif
 
@@ -123,6 +124,7 @@ struct st_susfs_open_redirect_hlist {
 	char                                    target_pathname[SUSFS_MAX_LEN_PATHNAME];
 	char                                    redirected_pathname[SUSFS_MAX_LEN_PATHNAME];
 	struct hlist_node                       node;
+	struct rcu_head                         rcu;
 };
 #endif
 
